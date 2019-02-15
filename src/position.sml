@@ -1,17 +1,19 @@
 (* Position module to track line numbers and columns. *)
 
+open Int
+
 fun tab (x : int) 
   : int = 
-  (div (x + 8 - 1) 8) * 8 + 1
+  ((x + 8 - 1) div 8) * 8 + 1
   
 signature Position =
   sig
-    type t
-    val next : t * char -> t
-    val show : t -> string
-    val showRelative : t * t -> string
+    type position
+    val next : position * char -> position
+    val show : position -> string
+    val showRelative : position * position -> string
 
-    val eq : t * t -> bool (* check if positions are equal. *)
+    val eq : position * position -> bool (* check if positions are equal. *)
   end
 
 structure Position =
@@ -22,9 +24,9 @@ structure Position =
     
     fun next ({file=file,line=line,column=column} : position, c : char) =
         case c of 
-             #"\n" = {file = file, line = (line + 1), column = 1}
-           | #"\t" = {file = file, line = line, column = tab column}
-           | _     = {file = file, line = line, column = column + 1} 
+             (#"\n") => {file = file, line = (line + 1), column = 1}
+           | (#"\t") => {file = file, line = line, column = tab column}
+           | _       => {file = file, line = line, column = column + 1} 
 
     fun show ({file=file,line=line,column=column} : position) 
       : string =
@@ -36,8 +38,8 @@ structure Position =
         val {file=file,line=line,column=column} = pos
         val {file=file',line=line',column=column'} = pos'
       in
-        if file == file'
-        then if line == line'
+        if file = file'
+        then if line = line'
              then show {file=file,line=line,column=column'}
              else show {file=file,line=line',column=column'}
         else show pos
