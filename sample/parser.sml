@@ -1,6 +1,15 @@
 (* A sample packrat parser for a simple arithmetic grammar. *)
 
-(* We must rely on laziness, thus, we open lazy. *)
+(* The lazy structure. Evaluate something lazily. *)
+
+structure Lazy =
+  struct
+    (* Thunks are the minimal requirement for the doubly recursive definition in
+     * the parse function.*)
+    fun thunk (x : 'a) 
+      : (unit -> 'a)
+      = fn () => x
+  end
 
 open Lazy
 
@@ -72,7 +81,9 @@ fun pPrimary (Derivation d : derivation)
                 | Success (x, Derivation d'') => 
                     (case #raw d'' of 
                           Failure => Failure
-                        | Success (#")", rest) => Success (x, rest))))
+                        | Success (#")", rest) => Success (x, rest)
+                        | Success (_, _) => Failure))
+        | Success (_, _) => Failure)
 
 fun pDecimal (Derivation d : derivation) 
   : int result
@@ -88,27 +99,30 @@ fun pDecimal (Derivation d : derivation)
        | Success (#"7", d') => Success (7, d')
        | Success (#"8", d') => Success (8, d')
        | Success (#"9", d') => Success (9, d')
+       | Success (_, _)     => Failure
 
 (* The parse function ties the recursive knot. 
  * Given our input string, it returns the resulting derivation. 
  * We must construct an initial derivation from the input, following this
  * we must pass the derivation along to our parsing functions. 
- * This is the first point at which Laziness is a requirement of this solution. *)
-fun parse (input : string)
+ * The definition in SML is a bit more involved than that of Haskell. 
+ * In SML, we must define a function in order to handle recursion. *)
+fun parse (input : char list)
   : derivation
   = let 
-      val d = Derivation { additive=pAdditive d 
-                         , multitive=pMultitive d 
-                         , primary=pPrimary d 
-                         , decimal=pDecimal d
-                         , raw=chr
-                         }
-      fun chr (s : string) 
-          : char result 
-          = case (explode s) of 
-                 nil => Failure
-               | (c::s') => Success c (parse s')   
+      fun derive () = let
+                        val chr = case input of 
+                                     nil => Failure
+                                   | (c :: s) => Success (c, (parse s))
+                        in
+                        Derivation { additive  = pAdditive (derive())
+                                   , multitive = pMultitive (derive()) 
+                                   , primary   = pPrimary (derive())  
+                                   , decimal   = pDecimal (derive()) 
+                                   , raw       = chr
+                                   }
+                        end
     in
-      d
+      derive ()
     end
 
