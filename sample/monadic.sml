@@ -28,8 +28,9 @@ signature CHOICE =
 (* Monad plus just a monad with choice. *)
 signature MONADPLUS = 
   sig
-    include MONAD 
-    include CHOICE where type 'a c = 'a m
+    structure M : MONAD
+    structure C : CHOICE
+    sharing type M.m = C.c
   end
 
 (* The parser data type will wrap a function that takes some concept of a
@@ -37,7 +38,6 @@ signature MONADPLUS =
  * define the notion of a parser result. *)
 datatype ('a, 'b) result = Success of 'a * 'b
                          | Failure
-                         | Done (* Notion of finished parsing. *)
 
 (* We need a parser data type, which we'll make monadic.
  *  It wraps a function which, given a representation of the grammar, returns a
@@ -50,17 +50,35 @@ datatype ('a, 'b) parser = Parser of ('a -> ('a, 'b) result)
 signature GRAMMAR =
   sig
     type g
+    val raw : g -> (char, g) result
   end
 
 
 functor ParserPlus(structure G : GRAMMAR) : MONADPLUS =
   struct
     structure G = G 
-    type 'a   = ('b, G.g)
-    type 'a m = 'a parser
-    type 'a c = 'a parser
+       
+    structure M : MONAD =
+      struct
+        type 'a m = ('a, G.g) parser
+        
+        fun return (x) = Parser (fn (y) => Success (x, y))
+        fun bind (Parser f, g) 
+          = let
+              fun parse (x) 
+                : ('a -> ('a, 'b) result) 
+                = (case f x of 
+                        Success (x', y') => fn (y) => Success (x', g y')  
+                      | Failure => fn (y) => Failure)
+            in
+              Parser parse 
+            end
+      end
 
-    fun return (x : 'a) 
-      : 'a parser 
-      = Parser (fn (y) => Success (x, y))
+    structure C : CHOICE =
+      struct
+        type 'a c = ('a, G.g) parser
+        
+        val empty = Parser (fn (x) => Failure)
+      end
   end
